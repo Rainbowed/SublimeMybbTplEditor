@@ -3,9 +3,7 @@
 # Aug 2013
 # Because sublime is awesome !!!
 
-import sublime, sublime_plugin, subprocess, os, sys, time, urllib.request, urllib.parse
-import re
-import codecs
+import sublime, sublime_plugin, subprocess, os, sys, time, urllib.request, urllib.parse, re, codecs
 
 ESCAPE_SEQUENCE_RE = re.compile(r'''
     ( \\U........      # 8-digit hex escapes
@@ -15,8 +13,6 @@ ESCAPE_SEQUENCE_RE = re.compile(r'''
     | \\N\{[^}]+\}     # Unicode characters by name
     | \\[\\'"abfnrtv]  # Single-character escapes
     )''', re.UNICODE | re.VERBOSE)
-
-
 
 class MybbTplLoadCommand(sublime_plugin.TextCommand):
 
@@ -242,7 +238,7 @@ class MybbTplUpdate(sublime_plugin.EventListener):
         m = MybbTplLoadCommand(view)
 
         # get the content of this file
-        content = self.addslashes(view.substr(sublime.Region(0, view.size())))
+        content = re.escape(view.substr(sublime.Region(0, view.size())))
 
         # we check if this template exists for the current set
         check = m.run_query("SELECT `tid` FROM `"+prefix+"templates` WHERE `title` = '"+name+"' AND `sid` = '"+sid+"'")
@@ -251,21 +247,24 @@ class MybbTplUpdate(sublime_plugin.EventListener):
         else:
             result = m.run_query("UPDATE `"+prefix+"templates` SET `template`= '"+content+"' WHERE `title` = '"+name+"' AND `sid` = '"+sid+"'")
 
-        if result == []:
-            sublime.status_message("Template updated successfully !")
+        if not result:
+            sublime.status_message("Template successfully updated!")
+        else:
+            print(result)
 
     def updateCss(self, name, view):
+        if self.settings.get('css_password') == "":
+            return sublime.error_message("Enter a password into the updatecss.php file and package settings")
+            
         tid = self.settings.get('css_set')
 
         content = view.substr(sublime.Region(0, view.size()))
 
-        postdata = urllib.parse.urlencode({"name" : name, "tid" : tid, "stylesheet" : content})
+        postdata = urllib.parse.urlencode({"name" : name, "tid" : tid, "stylesheet" : content, "password": self.settings.get('css_password')})
 
-        urllib.request.urlopen(self.settings.get('css_update_url'), postdata.encode('utf-8'))
+        f = urllib.request.urlopen(self.settings.get('css_update_url'), postdata.encode('utf-8')).read()
 
-    def addslashes(self, s):
-        l = ["\\", '"', "'", "\0", ]
-        for i in l:
-            if i in s:
-                s = s.replace(i, '\\'+i)
-        return s
+        if str(f).find('Invalid password') != -1:
+            sublime.error_message("Invalid CSS password")
+        else:
+            sublime.status_message("CSS successfully updated!")
