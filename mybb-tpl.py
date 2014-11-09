@@ -33,6 +33,11 @@ class MybbTplLoadCommand(sublime_plugin.TextCommand):
         files = self.run_query("SELECT `title` FROM `"+px+"templates` WHERE `sid`='"+ sid +"' OR `sid` = '-2' ORDER BY sid DESC, title ASC")
         files.pop(0) # rempve the first element
 
+        prefixes = self.run_query("SELECT `prefix` FROM `"+px+"templategroups`")
+        prefixes.append("ungrouped")
+
+        [os.mkdir(path + "/" + p) for p in prefixes if not os.path.exists(path + "/" + p)]
+
         # select all templates
         templates = self.run_query("SELECT `template` FROM `"+px+"templates` WHERE `sid`='"+ sid +"' OR `sid` = '-2' ORDER BY sid DESC, title ASC")
         templates.pop(0) # rempve the first element
@@ -43,9 +48,11 @@ class MybbTplLoadCommand(sublime_plugin.TextCommand):
         for idx,val in enumerate(files):
             if val not in tmp:
                 tmp.append(val)
-                f = open(path+"/"+val+".mybbtpl", 'wb+')
-                f.write(bytes(templates[idx], "UTF-8"))
-                f.close()
+
+                t = val.split('_').pop(0)
+
+                with open(path + "/" + ("ungrouped" if t not in prefixes else t) + "/" + val + ".mybbtpl", 'wb+') as f:
+                    f.write(bytes(templates[idx], "UTF-8"))
 
         # clean some stuff
         del files, templates, tmp
@@ -91,7 +98,9 @@ class MybbTplLoadCommand(sublime_plugin.TextCommand):
     def run_query(self, query):
         if query is None:
             return False
+
         self.settings = sublime.load_settings("mybb-tpl.sublime-settings")
+
         mysql = self.settings.get('mysql_executable', 'mysql')
         host = self.settings.get('host', "localhost")
         dbname = self.settings.get('dbname')
@@ -104,12 +113,18 @@ class MybbTplLoadCommand(sublime_plugin.TextCommand):
             conarray = [mysql, '--default-character-set=' + encoding, '-u', user, '-h', host, dbname, "-e %s" % query]
         else:
             conarray = [mysql, '--default-character-set=' + encoding, '-u', user, '-p%s' % passwd, '-h', host, dbname, "-e %s" % query]
+
         conarray = [x for x in conarray if x is not None]
-        process = subprocess.Popen(conarray, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+        startupinfo = None
+
+        if os.name == 'nt':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+        process = subprocess.Popen(conarray, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, startupinfo=startupinfo)
 
         lines = process.stdout.readlines()
-
-        stdout = []
 
         stdout = [self.decode_escapes(x.decode(encoding).rstrip()) for x in lines]
 
@@ -211,11 +226,11 @@ class MybbTplUpdate(sublime_plugin.EventListener):
         path = view.file_name()
         fileName = os.path.basename(path)
         ext = os.path.splitext(fileName)[1]
+
         if(ext == '.mybbtpl'):
             name = os.path.splitext(fileName)[0]
             self.updateTpl(name, view)
-
-        if(ext == '.mybbcss'):
+        elif(ext == '.mybbcss'):
             name = os.path.splitext(fileName)[0]
             self.updateCss(name, view)
 
