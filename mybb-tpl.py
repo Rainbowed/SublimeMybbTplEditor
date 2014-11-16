@@ -127,6 +127,9 @@ class MybbTplLoadCommand(sublime_plugin.TextCommand):
         if self.settings.get('passwd') != '' and stdout != []:
             stdout.pop(0) # remove the warning
 
+        if 'ERROR ' in ''.join(stdout):
+            sublime.error_message(''.join(stdout))
+
         return stdout
 
     def openInNewWindow(self, path):
