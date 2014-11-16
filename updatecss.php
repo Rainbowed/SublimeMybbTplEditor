@@ -3,10 +3,10 @@ define("IN_MYBB", 1);
 define("NO_ONLINE", 1);
 define('THIS_SCRIPT', 'updatecss.php');
 
-$password = 'cake';
+$password = ''; # Edit this to your password
 
 if($password == '')
-    die('set a password');
+    die('Invalid password');
 
 require_once "./inc/init.php";
 require_once "./admin/inc/functions_themes.php";
